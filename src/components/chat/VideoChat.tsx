@@ -61,6 +61,23 @@ const VideoChat: React.FC<VideoChatProps> = ({ character, isOpen, onClose, chatI
   const callStartTimeRef = useRef<Date | null>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Helper function to check if URL is a mock/placeholder URL
+  const isMockVideoUrl = (url: string | null): boolean => {
+    if (!url) return true;
+    
+    // Check for common mock URL patterns
+    const mockPatterns = [
+      'tavus-mock-video.com',
+      'mock-video',
+      'placeholder',
+      'example.com',
+      'localhost',
+      'test-video'
+    ];
+    
+    return mockPatterns.some(pattern => url.includes(pattern));
+  };
+
   // Start call duration timer
   useEffect(() => {
     if (callStatus === 'connected' && !callStartTimeRef.current) {
@@ -187,8 +204,8 @@ const VideoChat: React.FC<VideoChatProps> = ({ character, isOpen, onClose, chatI
         
         setMessages(prev => [...prev, characterResponse]);
         
-        // Update video URL if provided
-        if (result.videoUrl) {
+        // Update video URL if provided and it's not a mock URL
+        if (result.videoUrl && !isMockVideoUrl(result.videoUrl)) {
           setTavusVideoUrl(result.videoUrl);
         }
       } else {
@@ -287,7 +304,7 @@ const VideoChat: React.FC<VideoChatProps> = ({ character, isOpen, onClose, chatI
       <div className="flex-1 relative">
         {/* Main Video (Character) */}
         <div className="w-full h-full bg-gray-800 flex items-center justify-center">
-          {tavusVideoUrl ? (
+          {tavusVideoUrl && !isMockVideoUrl(tavusVideoUrl) ? (
             <video
               ref={videoRef}
               src={tavusVideoUrl}
@@ -295,8 +312,9 @@ const VideoChat: React.FC<VideoChatProps> = ({ character, isOpen, onClose, chatI
               muted={!isAudioEnabled}
               className="w-full h-full object-cover"
               onError={() => {
-                console.error('Video playback error');
-                toast.error('Video playback error');
+                console.error('Video playback error for URL:', tavusVideoUrl);
+                // Fallback to static image on video error
+                setTavusVideoUrl(null);
               }}
             />
           ) : character.image_url ? (
