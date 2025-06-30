@@ -85,11 +85,22 @@ serve(async (req) => {
           const errorText = await response.text();
           console.error(`ElevenLabs API error: ${response.status} ${response.statusText} - ${errorText}`);
           
+          // Parse error details for better user feedback
+          let userMessage = 'Voice preview temporarily unavailable. Please try again later.';
+          if (response.status === 401) {
+            userMessage = 'Voice service authentication failed. Please contact support.';
+          } else if (response.status === 429) {
+            userMessage = 'Voice service rate limit exceeded. Please try again in a few minutes.';
+          } else if (response.status === 422) {
+            userMessage = 'Invalid voice or text for preview. Please try a different voice.';
+          }
+          
           return new Response(
             JSON.stringify({ 
               success: false,
-              error: 'Voice preview temporarily unavailable. Please try again later.',
-              fallback: true
+              error: userMessage,
+              fallback: true,
+              debug_info: `API returned ${response.status}: ${response.statusText}`
             }),
             {
               status: 400,
@@ -102,7 +113,19 @@ serve(async (req) => {
         
         // Validate that we received audio data
         if (!audioBuffer || audioBuffer.byteLength === 0) {
-          throw new Error('No audio data received from ElevenLabs API');
+          console.error('ElevenLabs API returned empty audio buffer');
+          return new Response(
+            JSON.stringify({ 
+              success: false,
+              error: 'Voice service returned empty audio. Please check your account credits and try again.',
+              fallback: true,
+              debug_info: 'Empty audio buffer received from API'
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
         }
 
         const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
@@ -124,7 +147,8 @@ serve(async (req) => {
           JSON.stringify({ 
             success: false,
             error: 'Failed to generate voice preview. Please try again later.',
-            fallback: true
+            fallback: true,
+            debug_info: error.message
           }),
           {
             status: 500,
@@ -182,7 +206,24 @@ serve(async (req) => {
         );
       }
 
+      // Validate voice_id format
+      if (!voice_id || voice_id.length < 10) {
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: 'Invalid voice ID provided',
+            fallback: true
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
       try {
+        console.log(`Generating speech for voice ${voice_id} with ${text.length} characters`);
+        
         // Use the higher quality V2 multilingual model
         const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`, {
           method: 'POST',
@@ -202,15 +243,30 @@ serve(async (req) => {
           }),
         });
 
+        console.log(`ElevenLabs API response status: ${response.status}`);
+
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`ElevenLabs API error: ${response.status} ${response.statusText} - ${errorText}`);
           
+          // Parse error details for better user feedback
+          let userMessage = 'Text-to-speech temporarily unavailable. Please try again later.';
+          if (response.status === 401) {
+            userMessage = 'Voice service authentication failed. Please check your API key.';
+          } else if (response.status === 429) {
+            userMessage = 'Voice service rate limit exceeded. Please try again in a few minutes.';
+          } else if (response.status === 422) {
+            userMessage = 'Invalid voice or text for speech generation. Please try a different voice.';
+          } else if (response.status === 402) {
+            userMessage = 'Voice service quota exceeded. Please check your account credits.';
+          }
+          
           return new Response(
             JSON.stringify({ 
               success: false,
-              error: 'Text-to-speech temporarily unavailable. Please try again later.',
-              fallback: true
+              error: userMessage,
+              fallback: true,
+              debug_info: `API returned ${response.status}: ${response.statusText}`
             }),
             {
               status: 400,
@@ -220,20 +276,52 @@ serve(async (req) => {
         }
 
         const audioBuffer = await response.arrayBuffer();
+        console.log(`Received audio buffer of size: ${audioBuffer.byteLength} bytes`);
         
         // Validate that we received audio data
         if (!audioBuffer || audioBuffer.byteLength === 0) {
-          throw new Error('No audio data received from ElevenLabs API');
+          console.error('ElevenLabs API returned empty audio buffer despite 200 status');
+          return new Response(
+            JSON.stringify({ 
+              success: false,
+              error: 'Voice service returned empty audio. This usually indicates insufficient account credits or an invalid voice. Please check your ElevenLabs account.',
+              fallback: true,
+              debug_info: 'Empty audio buffer received from API despite 200 status'
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
+        }
+
+        // Additional validation - check if buffer contains actual audio data
+        if (audioBuffer.byteLength < 100) {
+          console.error(`Audio buffer too small: ${audioBuffer.byteLength} bytes`);
+          return new Response(
+            JSON.stringify({ 
+              success: false,
+              error: 'Voice service returned invalid audio data. Please check your account status.',
+              fallback: true,
+              debug_info: `Audio buffer too small: ${audioBuffer.byteLength} bytes`
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
         }
 
         const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+        console.log(`Successfully generated speech, base64 length: ${base64Audio.length}`);
 
         return new Response(
           JSON.stringify({ 
             success: true,
             audio_data: base64Audio,
             content_type: 'audio/mpeg',
-            model_used: 'eleven_multilingual_v2'
+            model_used: 'eleven_multilingual_v2',
+            audio_size_bytes: audioBuffer.byteLength
           }),
           {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -245,7 +333,8 @@ serve(async (req) => {
           JSON.stringify({ 
             success: false,
             error: 'Failed to generate speech. Please try again later.',
-            fallback: true
+            fallback: true,
+            debug_info: error.message
           }),
           {
             status: 500,
@@ -270,7 +359,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: 'An unexpected error occurred. Please try again later.'
+        error: 'An unexpected error occurred. Please try again later.',
+        debug_info: error.message
       }),
       {
         status: 500,

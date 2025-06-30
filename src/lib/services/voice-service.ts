@@ -149,26 +149,68 @@ export const generateSpeech = async (voiceId: string, text: string): Promise<str
     const data = await response.json();
 
     if (!data.success) {
-      throw new Error(data.error || 'Failed to generate speech');
+      // Provide more specific error messages based on the error type
+      let errorMessage = data.error || 'Failed to generate speech';
+      
+      // Add helpful context for common issues
+      if (data.debug_info) {
+        console.error('Speech generation debug info:', data.debug_info);
+        
+        if (data.debug_info.includes('Empty audio buffer')) {
+          errorMessage = 'Voice service returned no audio. This usually means insufficient account credits or an invalid voice. Please check your ElevenLabs account.';
+        } else if (data.debug_info.includes('401')) {
+          errorMessage = 'Voice service authentication failed. Please contact support.';
+        } else if (data.debug_info.includes('402')) {
+          errorMessage = 'Voice service quota exceeded. Please check your account credits.';
+        } else if (data.debug_info.includes('429')) {
+          errorMessage = 'Voice service rate limit exceeded. Please try again in a few minutes.';
+        }
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    // Validate that we received audio data
+    if (!data.audio_data || data.audio_data.length === 0) {
+      throw new Error('Voice service returned empty audio data. Please check your account status.');
     }
 
     // Convert base64 audio data to blob
-    const audioData = atob(data.audio_data);
-    const audioArray = new Uint8Array(audioData.length);
-    for (let i = 0; i < audioData.length; i++) {
-      audioArray[i] = audioData.charCodeAt(i);
+    try {
+      const audioData = atob(data.audio_data);
+      const audioArray = new Uint8Array(audioData.length);
+      for (let i = 0; i < audioData.length; i++) {
+        audioArray[i] = audioData.charCodeAt(i);
+      }
+      
+      const audioBlob = new Blob([audioArray], { type: data.content_type || 'audio/mpeg' });
+      
+      // Validate blob size
+      if (audioBlob.size === 0) {
+        throw new Error('Generated audio file is empty');
+      }
+      
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      // Cache the URL
+      audioCache.set(cacheKey, audioUrl);
+      
+      console.log(`Successfully generated speech: ${data.audio_size_bytes || audioBlob.size} bytes`);
+      return audioUrl;
+    } catch (decodeError) {
+      console.error('Error decoding audio data:', decodeError);
+      throw new Error('Failed to process audio data from voice service');
     }
-    
-    const audioBlob = new Blob([audioArray], { type: data.content_type || 'audio/mpeg' });
-    const audioUrl = URL.createObjectURL(audioBlob);
-    
-    // Cache the URL
-    audioCache.set(cacheKey, audioUrl);
-    
-    return audioUrl;
   } catch (error) {
     console.error('Error generating speech:', error);
-    throw error;
+    
+    // Re-throw with the original error message if it's already user-friendly
+    if (error.message.includes('Voice service') || error.message.includes('account') || error.message.includes('credits')) {
+      throw error;
+    }
+    
+    // Otherwise, provide a generic error message
+    throw new Error('Failed to generate speech. Please try again later.');
   }
 };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Heart, Send, Volume2, VolumeX, Play, Square, Brain } from 'lucide-react';
+import { ArrowLeft, Heart, Send, Volume2, VolumeX, Play, Square, Brain, AlertCircle } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
@@ -52,6 +52,7 @@ const ChatPage: React.FC = () => {
   });
   const [currentlyPlayingMessageId, setCurrentlyPlayingMessageId] = useState<string | null>(null);
   const [isGeneratingAudioForMessageId, setIsGeneratingAudioForMessageId] = useState<string | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const currentlyPlayingAudioRef = useRef<HTMLAudioElement | null>(null);
   
   // Personality state
@@ -173,6 +174,9 @@ const ChatPage: React.FC = () => {
   }, [messages]);
 
   const handlePlayStopAudio = async (messageId: string, text: string, voiceId: string | null) => {
+    // Clear any previous audio errors
+    setAudioError(null);
+
     // If this message is currently playing, stop it
     if (currentlyPlayingMessageId === messageId) {
       if (currentlyPlayingAudioRef.current) {
@@ -194,7 +198,9 @@ const ChatPage: React.FC = () => {
 
     // If no voice ID, show error
     if (!voiceId) {
-      toast.error('No voice selected for this character');
+      const errorMsg = 'No voice selected for this character';
+      setAudioError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
@@ -213,10 +219,13 @@ const ChatPage: React.FC = () => {
         currentlyPlayingAudioRef.current = null;
       };
 
-      audio.onerror = () => {
+      audio.onerror = (e) => {
+        console.error('Audio playback error:', e);
         setCurrentlyPlayingMessageId(null);
         currentlyPlayingAudioRef.current = null;
-        toast.error('Failed to play audio');
+        const errorMsg = 'Failed to play audio';
+        setAudioError(errorMsg);
+        toast.error(errorMsg);
       };
 
       await audio.play();
@@ -224,7 +233,17 @@ const ChatPage: React.FC = () => {
       
     } catch (error) {
       console.error('Error generating or playing speech:', error);
-      toast.error('Failed to generate speech. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate speech. Please try again.';
+      setAudioError(errorMessage);
+      
+      // Show user-friendly toast message
+      if (errorMessage.includes('account') || errorMessage.includes('credits')) {
+        toast.error('Voice service issue. Please check your account or try again later.', { duration: 5000 });
+      } else if (errorMessage.includes('rate limit')) {
+        toast.error('Voice service is busy. Please try again in a few minutes.', { duration: 5000 });
+      } else {
+        toast.error('Failed to generate speech. Please try again.', { duration: 3000 });
+      }
     } finally {
       setIsGeneratingAudioForMessageId(null);
     }
@@ -448,6 +467,22 @@ const ChatPage: React.FC = () => {
                 <span className="capitalize">{personalityAdaptation.style.replace(/_/g, ' ')}</span>
                 <span className="mx-2">•</span>
                 <span>Context: {personalityAdaptation.context}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Audio error indicator */}
+          {audioError && (
+            <div className="max-w-4xl mx-auto mt-2">
+              <div className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-1 inline-flex items-center">
+                <AlertCircle className="h-3 w-3 mr-1" />
+                <span>Audio: {audioError}</span>
+                <button 
+                  onClick={() => setAudioError(null)}
+                  className="ml-2 text-red-500 hover:text-red-700 dark:hover:text-red-300"
+                >
+                  ×
+                </button>
               </div>
             </div>
           )}
