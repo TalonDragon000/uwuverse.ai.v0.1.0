@@ -191,7 +191,7 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            text: text.substring(0, 500), // Limit text length
+            text: text.substring(0, 4500), // Increased limit for longer messages
             model_id: 'eleven_multilingual_v2',
             voice_settings: {
               stability: 0.6,

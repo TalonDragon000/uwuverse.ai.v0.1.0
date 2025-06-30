@@ -142,7 +142,7 @@ export const generateSpeech = async (voiceId: string, text: string): Promise<str
       headers,
       body: JSON.stringify({ 
         voice_id: voiceId, 
-        text: text.substring(0, 500) // Limit text length for performance
+        text: text.substring(0, 4500) // Increased limit for longer messages
       }),
     });
 
