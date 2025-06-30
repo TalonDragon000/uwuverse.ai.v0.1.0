@@ -1,4 +1,8 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
 
 const ELEVENLABS_API_KEY = Deno.env.get('VITE_ELEVENLABS_API_KEY');
 
@@ -12,15 +16,25 @@ interface SpeechGenerationRequest {
   text: string;
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+// Helper function to convert Uint8Array to base64 without stack overflow
+function uint8ArrayToBase64(uint8Array: Uint8Array): string {
+  let binaryString = '';
+  const chunkSize = 8192; // Process in chunks to avoid stack overflow
+  
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    const chunk = uint8Array.slice(i, i + chunkSize);
+    binaryString += String.fromCharCode(...chunk);
+  }
+  
+  return btoa(binaryString);
+}
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders,
+    });
   }
 
   try {
@@ -128,7 +142,7 @@ serve(async (req) => {
           );
         }
 
-        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+        const base64Audio = uint8ArrayToBase64(new Uint8Array(audioBuffer));
 
         return new Response(
           JSON.stringify({ 
@@ -312,7 +326,7 @@ serve(async (req) => {
           );
         }
 
-        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+        const base64Audio = uint8ArrayToBase64(new Uint8Array(audioBuffer));
         console.log(`Successfully generated speech, base64 length: ${base64Audio.length}`);
 
         return new Response(
