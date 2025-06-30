@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Heart, Send } from 'lucide-react';
+import { ArrowLeft, Heart, Send, Volume2, VolumeX, Play, Square } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { supabase } from '../lib/supabase/supabaseClient';
 import { motion } from 'framer-motion';
-import { generateChatResponse } from '../lib/services/ai-service'; // Import generateChatResponse
+import { generateChatResponse } from '../lib/services/ai-service';
+import { generateSpeech } from '../lib/services/voice-service';
+import { toast } from 'sonner';
 
 type Character = {
   id: string;
@@ -39,9 +41,35 @@ const ChatPage: React.FC = () => {
     setIsTyping,
     updateLoveMeter
   } = useChatStore();
+  
   const [character, setCharacter] = useState<Character | null>(null);
   const [messageText, setMessageText] = useState('');
+  
+  // Audio state
+  const [isAudioEnabled, setIsAudioEnabled] = useState(() => {
+    const saved = localStorage.getItem('uwuverse-audio-enabled');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [currentlyPlayingMessageId, setCurrentlyPlayingMessageId] = useState<string | null>(null);
+  const [isGeneratingAudioForMessageId, setIsGeneratingAudioForMessageId] = useState<string | null>(null);
+  const currentlyPlayingAudioRef = useRef<HTMLAudioElement | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Save audio preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('uwuverse-audio-enabled', JSON.stringify(isAudioEnabled));
+  }, [isAudioEnabled]);
+
+  // Clean up audio when component unmounts
+  useEffect(() => {
+    return () => {
+      if (currentlyPlayingAudioRef.current) {
+        currentlyPlayingAudioRef.current.pause();
+        currentlyPlayingAudioRef.current.src = '';
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!chatId || !session?.user) return;
@@ -63,7 +91,6 @@ const ChatPage: React.FC = () => {
 
         if (chatError) {
           console.error('Error fetching chat:', chatError);
-          // Optionally, navigate away or show an error message to the user
           return;
         }
         setActiveChat(chatData);
@@ -72,12 +99,11 @@ const ChatPage: React.FC = () => {
         // Get the total number of messages for the current chat
         const { count: messageCount, error: countError } = await supabase
           .from('messages')
-          .select('*', { count: 'exact', head: true }) // Use head: true for efficiency
+          .select('*', { count: 'exact', head: true })
           .eq('chat_id', chatId);
 
         if (countError) {
           console.error('Error fetching message count:', countError);
-          // Decide how to handle this error. For now, we'll proceed but won't insert an initial message if count fails.
         }
 
         // Only insert the initial message if the message count is 0
@@ -108,7 +134,6 @@ const ChatPage: React.FC = () => {
 
           if (newMessageError) {
             console.error('Error inserting initial message:', newMessageError);
-            // Optionally, show a toast notification to the user
           }
         }
 
@@ -121,7 +146,7 @@ const ChatPage: React.FC = () => {
 
         if (messagesError) {
           console.error('Error fetching messages:', messagesError);
-          setMessages([]); // Set to empty array on error
+          setMessages([]);
         } else {
           setMessages(messagesData || []);
         }
@@ -138,6 +163,64 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const handlePlayStopAudio = async (messageId: string, text: string, voiceId: string | null) => {
+    // If this message is currently playing, stop it
+    if (currentlyPlayingMessageId === messageId) {
+      if (currentlyPlayingAudioRef.current) {
+        currentlyPlayingAudioRef.current.pause();
+        currentlyPlayingAudioRef.current.src = '';
+        currentlyPlayingAudioRef.current = null;
+      }
+      setCurrentlyPlayingMessageId(null);
+      return;
+    }
+
+    // Stop any currently playing audio
+    if (currentlyPlayingAudioRef.current) {
+      currentlyPlayingAudioRef.current.pause();
+      currentlyPlayingAudioRef.current.src = '';
+      currentlyPlayingAudioRef.current = null;
+    }
+    setCurrentlyPlayingMessageId(null);
+
+    // If no voice ID, show error
+    if (!voiceId) {
+      toast.error('No voice selected for this character');
+      return;
+    }
+
+    // Start generating audio
+    setIsGeneratingAudioForMessageId(messageId);
+
+    try {
+      const audioUrl = await generateSpeech(voiceId, text);
+      
+      // Create and play audio
+      const audio = new Audio(audioUrl);
+      currentlyPlayingAudioRef.current = audio;
+      
+      audio.onended = () => {
+        setCurrentlyPlayingMessageId(null);
+        currentlyPlayingAudioRef.current = null;
+      };
+
+      audio.onerror = () => {
+        setCurrentlyPlayingMessageId(null);
+        currentlyPlayingAudioRef.current = null;
+        toast.error('Failed to play audio');
+      };
+
+      await audio.play();
+      setCurrentlyPlayingMessageId(messageId);
+      
+    } catch (error) {
+      console.error('Error generating or playing speech:', error);
+      toast.error('Failed to generate speech. Please try again.');
+    } finally {
+      setIsGeneratingAudioForMessageId(null);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !chatId || !session?.user || !character) return;
@@ -284,11 +367,11 @@ const ChatPage: React.FC = () => {
             </Link>
 
             {character && (
-              <div className="flex items-center">
+              <div className="flex items-center flex-grow">
                 <div className="h-10 w-10 rounded-full bg-cover bg-center"
                   style={{ backgroundImage: `url(${character.image_url || 'https://images.pexels.com/photos/6157228/pexels-photo-6157228.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1'})` }}>
                 </div>
-                <div className="ml-3">
+                <div className="ml-3 flex-grow">
                   <h2 className="font-medium">{character.name}</h2>
                   <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
                     {activeChat && (
@@ -305,6 +388,23 @@ const ChatPage: React.FC = () => {
                     )}
                   </div>
                 </div>
+                
+                {/* Audio toggle button */}
+                <button
+                  onClick={() => setIsAudioEnabled(!isAudioEnabled)}
+                  className={`p-2 rounded-full transition-colors duration-200 ${
+                    isAudioEnabled 
+                      ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400' 
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                  }`}
+                  title={isAudioEnabled ? 'Disable audio' : 'Enable audio'}
+                >
+                  {isAudioEnabled ? (
+                    <Volume2 className="h-5 w-5" />
+                  ) : (
+                    <VolumeX className="h-5 w-5" />
+                  )}
+                </button>
               </div>
             )}
           </div>
@@ -318,18 +418,38 @@ const ChatPage: React.FC = () => {
                 key={message.id}
                 className={`mb-4 flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className={`max-w-[80%] px-4 py-3 rounded-2xl ${
-                    message.sender === 'user'
-                      ? 'bg-pink-500 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200'
-                  }`}
-                >
-                  {message.content}
-                </motion.div>
+                <div className="flex items-start max-w-[80%]">
+                  {/* Audio button for character messages */}
+                  {message.sender === 'character' && isAudioEnabled && character?.voice_id && (
+                    <button
+                      onClick={() => handlePlayStopAudio(message.id, message.content, character.voice_id)}
+                      disabled={isGeneratingAudioForMessageId === message.id}
+                      className="mr-2 mt-1 p-1.5 rounded-full bg-pink-100 dark:bg-pink-900/30 hover:bg-pink-200 dark:hover:bg-pink-900/50 text-pink-600 dark:text-pink-400 transition-colors duration-200 flex-shrink-0"
+                      title={currentlyPlayingMessageId === message.id ? 'Stop audio' : 'Play audio'}
+                    >
+                      {isGeneratingAudioForMessageId === message.id ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-pink-600 dark:border-pink-400"></div>
+                      ) : currentlyPlayingMessageId === message.id ? (
+                        <Square className="h-4 w-4" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
+                  
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className={`px-4 py-3 rounded-2xl ${
+                      message.sender === 'user'
+                        ? 'bg-pink-500 text-white'
+                        : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200'
+                    }`}
+                  >
+                    {message.content}
+                  </motion.div>
+                </div>
               </div>
             ))}
 

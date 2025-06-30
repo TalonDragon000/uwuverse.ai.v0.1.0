@@ -26,6 +26,11 @@ interface ChatState {
   messagesById: Record<string, Message>;
   isTyping: boolean;
   
+  // Audio features
+  isAudioEnabled: boolean;
+  currentlyPlayingMessageId: string | null;
+  isGeneratingAudioForMessageId: string | null;
+  
   // Actions
   setActiveChat: (chat: Chat | null) => void;
   setMessages: (messages: Message[]) => void;
@@ -33,10 +38,22 @@ interface ChatState {
   setIsTyping: (isTyping: boolean) => void;
   updateLoveMeter: (value: number) => void;
   
+  // Audio actions
+  setIsAudioEnabled: (enabled: boolean) => void;
+  setCurrentlyPlayingMessageId: (messageId: string | null) => void;
+  setIsGeneratingAudioForMessageId: (messageId: string | null) => void;
+  
   // Selectors
   getMessages: () => Message[];
   getRecentMessages: (count: number) => Message[];
 }
+
+// Initialize audio preference from localStorage
+const getInitialAudioEnabled = (): boolean => {
+  if (typeof window === 'undefined') return true;
+  const saved = localStorage.getItem('uwuverse-audio-enabled');
+  return saved !== null ? JSON.parse(saved) : true;
+};
 
 export const useChatStore = create<ChatState>()(
   subscribeWithSelector((set, get) => ({
@@ -44,6 +61,11 @@ export const useChatStore = create<ChatState>()(
     messageIds: [],
     messagesById: {},
     isTyping: false,
+    
+    // Audio state
+    isAudioEnabled: getInitialAudioEnabled(),
+    currentlyPlayingMessageId: null,
+    isGeneratingAudioForMessageId: null,
     
     setActiveChat: (chat) => set({ activeChat: chat }),
     
@@ -70,6 +92,18 @@ export const useChatStore = create<ChatState>()(
       activeChat: state.activeChat ? { ...state.activeChat, love_meter: value } : null
     })),
     
+    // Audio actions
+    setIsAudioEnabled: (enabled) => {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('uwuverse-audio-enabled', JSON.stringify(enabled));
+      }
+      set({ isAudioEnabled: enabled });
+    },
+    
+    setCurrentlyPlayingMessageId: (messageId) => set({ currentlyPlayingMessageId: messageId }),
+    
+    setIsGeneratingAudioForMessageId: (messageId) => set({ isGeneratingAudioForMessageId: messageId }),
+    
     // Memoized selectors
     getMessages: () => {
       const { messageIds, messagesById } = get();
@@ -91,3 +125,11 @@ export const useActiveChat = () => useChatStore(state => state.activeChat);
 export const useIsTyping = () => useChatStore(state => state.isTyping);
 export const useMessages = () => useChatStore(state => state.getMessages());
 export const useRecentMessages = (count: number) => useChatStore(state => state.getRecentMessages(count));
+
+// Audio-specific hooks
+export const useIsAudioEnabled = () => useChatStore(state => state.isAudioEnabled);
+export const useCurrentlyPlayingMessageId = () => useChatStore(state => state.currentlyPlayingMessageId);
+export const useIsGeneratingAudioForMessageId = () => useChatStore(state => state.isGeneratingAudioForMessageId);
+export const useSetIsAudioEnabled = () => useChatStore(state => state.setIsAudioEnabled);
+export const useSetCurrentlyPlayingMessageId = () => useChatStore(state => state.setCurrentlyPlayingMessageId);
+export const useSetIsGeneratingAudioForMessageId = () => useChatStore(state => state.setIsGeneratingAudioForMessageId);
