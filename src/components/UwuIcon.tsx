@@ -17,7 +17,7 @@ const UwuIcon: React.FC<UwuIconProps> = ({
   if (useImage) {
     return (
       <img
-        src="/uwu icon large pink.png"
+        src="/uwuicon.png"
         alt="UwUverse.ai Logo"
         width={size}
         height={size}
@@ -94,7 +94,7 @@ const UwuIcon: React.FC<UwuIconProps> = ({
       </g>
       
       {/* Fallback text for accessibility */}
-      <title>💖</title>
+      <title>💖 =UwU= </title>
     </svg>
   );
 };
