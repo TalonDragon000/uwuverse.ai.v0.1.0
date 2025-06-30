@@ -80,66 +80,114 @@ const getFallbackImage = (gender: string, art_style: string): string => {
   return genderImages[art_style as keyof typeof genderImages] || genderImages.default;
 };
 
-// Generate optimized prompt for Stability AI
-const generateStabilityAIPrompt = (request: CharacterRequest): { prompt: string; negativePrompt: string; stylePreset?: string } => {
+// Generate optimized prompt for OpenAI DALL-E
+const generateOpenAIPrompt = (request: CharacterRequest): string => {
   const { gender, height, build, eye_color, hair_color, skin_tone, personality_traits, art_style } = request;
 
-  // Enhanced art style descriptions optimized for Stability AI
+  // Enhanced art style descriptions optimized for DALL-E
   let stylePrefix = '';
   let styleDetails = '';
   let qualityTags = '';
-  let stylePreset: string | undefined;
   
   switch (art_style) {
     case 'anime':
-      stylePrefix = 'anime style, manga style, cel shaded';
-      styleDetails = 'large expressive eyes, vibrant colors, soft cel-shading, clean line art, anime proportions, detailed hair, kawaii aesthetic';
-      qualityTags = 'high quality anime art, studio quality, detailed anime illustration, masterpiece';
-      stylePreset = 'anime';
+      stylePrefix = 'anime style, manga style';
+      styleDetails = 'large expressive eyes, vibrant colors, cel-shaded, clean line art, anime proportions, detailed hair';
+      qualityTags = 'high quality anime art, studio quality';
       break;
     case '3d':
-      stylePrefix = '3d render, digital art, cgi';
-      styleDetails = 'realistic 3d rendering, soft lighting, detailed textures, modern 3d art style, smooth surfaces, professional 3d modeling';
-      qualityTags = 'high quality 3d render, octane render, unreal engine, photorealistic 3d, masterpiece';
-      stylePreset = '3d-model';
+      stylePrefix = '3d render, digital art';
+      styleDetails = 'realistic 3d rendering, soft lighting, detailed textures, modern 3d art style';
+      qualityTags = 'high quality 3d render, professional 3d modeling';
       break;
     case 'comic':
       stylePrefix = 'comic book style, western comic art';
-      styleDetails = 'bold clean line art, dynamic poses, strong contrast, vibrant colors, comic book shading, heroic proportions, detailed costume design';
-      qualityTags = 'high quality comic art, professional comic illustration, marvel style, dc comics style, masterpiece';
-      stylePreset = 'comic-book';
+      styleDetails = 'bold clean line art, dynamic poses, vibrant colors, comic book shading';
+      qualityTags = 'professional comic illustration, marvel style';
       break;
     case 'realistic':
-      stylePrefix = 'photorealistic, realistic portrait, digital painting';
-      styleDetails = 'natural human proportions, realistic skin textures, detailed facial features, natural lighting, lifelike detail';
-      qualityTags = 'photorealistic, high resolution, professional portrait, detailed realistic art, masterpiece';
-      stylePreset = 'photographic';
+      stylePrefix = 'photorealistic, realistic portrait';
+      styleDetails = 'natural human proportions, realistic skin textures, detailed facial features, natural lighting';
+      qualityTags = 'photorealistic, high resolution, professional portrait';
       break;
     default:
       stylePrefix = 'digital art, illustration';
       styleDetails = 'professional artistic quality, appealing character design, vibrant colors';
-      qualityTags = 'high quality digital art, professional illustration, masterpiece';
+      qualityTags = 'high quality digital art, professional illustration';
   }
 
   // Build personality-influenced description
   const personalityDescription = personality_traits.length > 0 
-    ? `${personality_traits.slice(0, 3).join(', ')} personality, expressive face showing ${personality_traits[0]} traits`
+    ? `${personality_traits.slice(0, 3).join(', ')} personality, expressive face`
     : 'friendly and approachable expression';
 
-  // Construct the optimized prompt for Stability AI
-  const prompt = `${stylePrefix}, portrait of a ${gender} character, ${height} height, ${build} build, ${eye_color} eyes, ${hair_color} hair, ${skin_tone} skin, ${personalityDescription}, ${styleDetails}, upper body shot, centered composition, soft background, ${qualityTags}`;
+  // Construct the optimized prompt for DALL-E
+  const prompt = `${stylePrefix}, portrait of a ${gender} character, ${height} height, ${build} build, ${eye_color} eyes, ${hair_color} hair, ${skin_tone} skin, ${personalityDescription}, ${styleDetails}, upper body shot, centered composition, ${qualityTags}`;
 
-  // Enhanced negative prompt for better quality
-  const negativePrompt = 'low quality, blurry, distorted, deformed, ugly, bad anatomy, extra limbs, missing limbs, extra fingers, missing fingers, text, watermark, signature, logo, multiple people, nsfw, nude, naked, inappropriate, bad hands, malformed hands, duplicate, cropped, out of frame, worst quality, low resolution, pixelated';
-
-  return { prompt, negativePrompt, stylePreset };
+  return prompt;
 };
 
 // Try image generation APIs in priority order
 const tryImageGenerationAPIs = async (request: CharacterRequest): Promise<{ imageUrl: string; provider: string; prompt?: string }> => {
-  const { prompt, negativePrompt, stylePreset } = generateStabilityAIPrompt(request);
+  const prompt = generateOpenAIPrompt(request);
   
-  // 1. Try Stability AI API (Primary - Best Quality)
+  // 1. Try OpenAI DALL-E API (Primary - Best Quality)
+  const openaiApiKey = Deno.env.get('OPENAI_API_KEY') || Deno.env.get('OPENAI_PROJ_API_KEY');
+  if (openaiApiKey) {
+    try {
+      console.log('Trying OpenAI DALL-E API...');
+      
+      const response = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'dall-e-3',
+          prompt: prompt,
+          n: 1,
+          size: '1024x1024',
+          quality: 'standard',
+          style: 'natural'
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error(`OpenAI API error: ${response.status} - ${JSON.stringify(errorData)}`);
+        
+        // Check for specific error types
+        if (response.status === 400 && errorData.error?.code === 'content_policy_violation') {
+          throw new Error('Image prompt violates content policy. Please try different character traits.');
+        } else if (response.status === 429) {
+          throw new Error('OpenAI rate limit exceeded. Please try again later.');
+        } else if (response.status === 401) {
+          throw new Error('OpenAI API authentication failed. Please check your API key.');
+        }
+        
+        throw new Error(`OpenAI API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.data && data.data[0] && data.data[0].url) {
+        console.log('Successfully generated image using OpenAI DALL-E');
+        return { imageUrl: data.data[0].url, provider: 'openai-dalle', prompt };
+      }
+      
+      throw new Error('OpenAI API returned no image data');
+      
+    } catch (error) {
+      console.error('Error with OpenAI DALL-E API:', error);
+      // Don't immediately fallback for content policy violations
+      if (error.message.includes('content policy')) {
+        throw error;
+      }
+    }
+  }
+
+  // 2. Try Stability AI API (Secondary - if configured)
   const stabilityApiKey = Deno.env.get('STABILITY_AI_API_KEY');
   if (stabilityApiKey) {
     try {
@@ -147,13 +195,8 @@ const tryImageGenerationAPIs = async (request: CharacterRequest): Promise<{ imag
       
       const formData = new FormData();
       formData.append('prompt', prompt);
-      formData.append('negative_prompt', negativePrompt);
       formData.append('aspect_ratio', '1:1');
       formData.append('output_format', 'png');
-      
-      if (stylePreset) {
-        formData.append('style_preset', stylePreset);
-      }
 
       const response = await fetch('https://api.stability.ai/v2beta/stable-image/generate/core', {
         method: 'POST',
@@ -183,7 +226,7 @@ const tryImageGenerationAPIs = async (request: CharacterRequest): Promise<{ imag
     }
   }
 
-  // 2. Try Hugging Face API (Secondary - Free)
+  // 3. Try Hugging Face API (Tertiary - Free)
   const huggingFaceApiKey = Deno.env.get('HUGGING_FACE_API_KEY');
   if (huggingFaceApiKey) {
     try {
@@ -202,7 +245,6 @@ const tryImageGenerationAPIs = async (request: CharacterRequest): Promise<{ imag
             guidance_scale: 7.5,
             width: 512,
             height: 512,
-            negative_prompt: negativePrompt,
           }
         }),
       });
@@ -226,50 +268,6 @@ const tryImageGenerationAPIs = async (request: CharacterRequest): Promise<{ imag
       
     } catch (error) {
       console.error('Error with Hugging Face API:', error);
-    }
-  }
-
-  // 3. Try Replicate API (Tertiary - Paid)
-  const replicateApiKey = Deno.env.get('REPLICATE_API_KEY');
-  if (replicateApiKey) {
-    try {
-      console.log('Trying Replicate API...');
-      
-      const response = await fetch('https://api.replicate.com/v1/predictions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${replicateApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          version: "ac732df83cea7fff18b8472768c88ad041fa750ff7682a21affe81863cbe77e4", // Stable Diffusion v1.5
-          input: {
-            prompt: prompt,
-            negative_prompt: negativePrompt,
-            width: 512,
-            height: 512,
-            num_inference_steps: 30,
-            guidance_scale: 7.5,
-            scheduler: "K_EULER_ANCESTRAL"
-          }
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Replicate API error: ${response.status} - ${errorText}`);
-        throw new Error(`Replicate API error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      if (data.output && data.output[0]) {
-        console.log('Successfully generated image using Replicate');
-        return { imageUrl: data.output[0], provider: 'replicate', prompt };
-      }
-      throw new Error(data.detail || 'Unknown error from Replicate API');
-      
-    } catch (error) {
-      console.error('Error with Replicate API:', error);
     }
   }
 
@@ -320,7 +318,7 @@ serve(async (req) => {
           fallback: true,
           message: 'Character created with curated reference image. AI image generation temporarily unavailable.',
           error_details: aiError.message,
-          fallback_reason: 'All AI APIs failed or not configured'
+          fallback_reason: 'AI APIs failed or not configured'
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
