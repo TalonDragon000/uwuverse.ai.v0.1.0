@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Heart, Send, Volume2, VolumeX, Play, Square, Brain, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Heart, Send, Volume2, VolumeX, Play, Square, Brain, AlertCircle, Video } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
+import VideoChat from '../components/chat/VideoChat';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { supabase } from '../lib/supabase/supabaseClient';
@@ -26,6 +27,8 @@ type Character = {
   eye_color: string | null;
   hair_color: string | null;
   skin_tone: string | null;
+  tavus_character_id: string | null;
+  tavus_video_url: string | null;
 };
 
 const ChatPage: React.FC = () => {
@@ -54,6 +57,9 @@ const ChatPage: React.FC = () => {
   const [isGeneratingAudioForMessageId, setIsGeneratingAudioForMessageId] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
   const currentlyPlayingAudioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Video chat state
+  const [isVideoCallActive, setIsVideoCallActive] = useState(false);
   
   // Personality state
   const [currentPersonalityContext, setCurrentPersonalityContext] = useState<string>('casual');
@@ -91,7 +97,7 @@ const ChatPage: React.FC = () => {
           .select(`
             *,
             characters (
-              id, name, gender, personality_traits, image_url, voice_id, voice_name, backstory, meet_cute, art_style, height, build, eye_color, hair_color, skin_tone
+              id, name, gender, personality_traits, image_url, voice_id, voice_name, backstory, meet_cute, art_style, height, build, eye_color, hair_color, skin_tone, tavus_character_id, tavus_video_url
             )
           `)
           .eq('id', chatId)
@@ -247,6 +253,19 @@ const ChatPage: React.FC = () => {
     } finally {
       setIsGeneratingAudioForMessageId(null);
     }
+  };
+
+  const handleStartVideoCall = () => {
+    if (!character) {
+      toast.error('Character data not available for video call');
+      return;
+    }
+    
+    setIsVideoCallActive(true);
+  };
+
+  const handleEndVideoCall = () => {
+    setIsVideoCallActive(false);
   };
 
   const handleSendMessage = async () => {
@@ -439,22 +458,34 @@ const ChatPage: React.FC = () => {
                   </div>
                 </div>
                 
-                {/* Audio toggle button */}
-                <button
-                  onClick={() => setIsAudioEnabled(!isAudioEnabled)}
-                  className={`p-2 rounded-full transition-colors duration-200 ${
-                    isAudioEnabled 
-                      ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400' 
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                  }`}
-                  title={isAudioEnabled ? 'Disable audio' : 'Enable audio'}
-                >
-                  {isAudioEnabled ? (
-                    <Volume2 className="h-5 w-5" />
-                  ) : (
-                    <VolumeX className="h-5 w-5" />
-                  )}
-                </button>
+                {/* Audio and Video toggle buttons */}
+                <div className="flex items-center space-x-2">
+                  {/* Audio toggle button */}
+                  <button
+                    onClick={() => setIsAudioEnabled(!isAudioEnabled)}
+                    className={`p-2 rounded-full transition-colors duration-200 ${
+                      isAudioEnabled 
+                        ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400' 
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                    }`}
+                    title={isAudioEnabled ? 'Disable audio' : 'Enable audio'}
+                  >
+                    {isAudioEnabled ? (
+                      <Volume2 className="h-5 w-5" />
+                    ) : (
+                      <VolumeX className="h-5 w-5" />
+                    )}
+                  </button>
+
+                  {/* Video call toggle button */}
+                  <button
+                    onClick={handleStartVideoCall}
+                    className="p-2 rounded-full transition-colors duration-200 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50"
+                    title="Start video call"
+                  >
+                    <Video className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -585,6 +616,16 @@ const ChatPage: React.FC = () => {
           </div>
         </div>
       </main>
+
+      {/* Video Chat Component */}
+      {character && (
+        <VideoChat
+          character={character}
+          isOpen={isVideoCallActive}
+          onClose={handleEndVideoCall}
+          chatId={chatId || ''}
+        />
+      )}
     </div>
   );
 };
