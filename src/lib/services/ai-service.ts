@@ -32,6 +32,23 @@ interface CharacterRequest {
   art_style: string;
 }
 
+interface ChatResponse {
+  success: boolean;
+  response?: string;
+  model_used?: string;
+  fallback?: boolean;
+  fallback_reason?: string;
+  response_time_ms?: number;
+  total_time_ms?: number;
+  personality_profile?: {
+    communication_style: string;
+    current_mood: string;
+    adaptation_context: string;
+  };
+  error?: string;
+  timestamp?: string;
+}
+
 // In-memory cache for recent responses (LRU-style)
 class ResponseCache {
   private cache = new Map<string, { data: any; timestamp: number }>();
@@ -62,9 +79,9 @@ class ResponseCache {
 
 const responseCache = new ResponseCache();
 
-export const generateChatResponse = async (request: ChatRequest) => {
-  // Create cache key from request
-  const cacheKey = `chat_${request.character_id}_${request.message.substring(0, 50)}`;
+export const generateChatResponse = async (request: ChatRequest): Promise<ChatResponse> => {
+  // Create cache key from request (excluding full chat history for better cache hits)
+  const cacheKey = `chat_${request.character_id}_${request.message.substring(0, 50)}_${request.character_traits.join(',')}`;
   const cached = responseCache.get(cacheKey);
   
   if (cached) {
@@ -88,10 +105,23 @@ export const generateChatResponse = async (request: ChatRequest) => {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data: ChatResponse = await response.json();
     
     if (data.success) {
-      responseCache.set(cacheKey, data);
+      // Only cache successful responses that aren't fallbacks
+      if (!data.fallback) {
+        responseCache.set(cacheKey, data);
+      }
+      
+      // Log personality adaptation info for debugging
+      if (data.personality_profile) {
+        console.log('Personality Adaptation:', {
+          style: data.personality_profile.communication_style,
+          mood: data.personality_profile.current_mood,
+          context: data.personality_profile.adaptation_context,
+          model: data.model_used
+        });
+      }
     }
     
     return data;
@@ -144,4 +174,25 @@ export const generateCharacterImage = async (request: CharacterRequest) => {
 export const getVoiceService = async () => {
   const { getElevenLabsVoices, generateVoicePreview } = await import('./voice-service');
   return { getElevenLabsVoices, generateVoicePreview };
+};
+
+// Personality analysis utilities for client-side use
+export const analyzePersonalityContext = (message: string, chatHistory: Array<{ role: string; content: string }>) => {
+  const recentMessages = chatHistory.slice(-5);
+  const fullText = (message + ' ' + recentMessages.map(h => h.content).join(' ')).toLowerCase();
+  
+  const context = {
+    emotional: fullText.match(/\b(feel|emotion|heart|love|care|sad|happy|worried)\b/) !== null,
+    playful: fullText.match(/\b(fun|play|game|joke|laugh|haha|funny)\b/) !== null,
+    romantic: fullText.match(/\b(love|kiss|date|romantic|beautiful|gorgeous)\b/) !== null,
+    supportive: fullText.match(/\b(problem|help|support|advice|comfort)\b/) !== null,
+    curious: fullText.match(/\b(what|how|why|when|where|tell me|explain)\b/) !== null,
+  };
+  
+  return {
+    primaryContext: Object.entries(context).find(([_, value]) => value)?.[0] || 'casual',
+    allContexts: Object.entries(context).filter(([_, value]) => value).map(([key, _]) => key),
+    conversationTone: message.includes('?') ? 'questioning' : 
+                     message.includes('!') ? 'excited' : 'conversational'
+  };
 };

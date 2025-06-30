@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Heart, Send, Volume2, VolumeX, Play, Square } from 'lucide-react';
+import { ArrowLeft, Heart, Send, Volume2, VolumeX, Play, Square, Brain } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { supabase } from '../lib/supabase/supabaseClient';
 import { motion } from 'framer-motion';
-import { generateChatResponse } from '../lib/services/ai-service';
+import { generateChatResponse, analyzePersonalityContext } from '../lib/services/ai-service';
 import { generateSpeech } from '../lib/services/voice-service';
 import { toast } from 'sonner';
 
@@ -53,6 +53,14 @@ const ChatPage: React.FC = () => {
   const [currentlyPlayingMessageId, setCurrentlyPlayingMessageId] = useState<string | null>(null);
   const [isGeneratingAudioForMessageId, setIsGeneratingAudioForMessageId] = useState<string | null>(null);
   const currentlyPlayingAudioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Personality state
+  const [currentPersonalityContext, setCurrentPersonalityContext] = useState<string>('casual');
+  const [personalityAdaptation, setPersonalityAdaptation] = useState<{
+    style: string;
+    mood: string;
+    context: string;
+  } | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -228,6 +236,10 @@ const ChatPage: React.FC = () => {
     const userMessage = messageText;
     setMessageText('');
 
+    // Analyze personality context before sending
+    const personalityContext = analyzePersonalityContext(userMessage, messages.slice(-5));
+    setCurrentPersonalityContext(personalityContext.primaryContext);
+
     try {
       // Insert user message
       const { data: newUserMessage, error: userMessageError } = await supabase
@@ -245,14 +257,14 @@ const ChatPage: React.FC = () => {
         addMessage(newUserMessage);
       }
 
-      // Simulate AI thinking
+      // Simulate AI thinking with personality adaptation indicator
       setIsTyping(true);
 
       // Wait a realistic amount of time (1.5-3 seconds)
       const typingDelay = Math.floor(Math.random() * 1500) + 1500;
       await new Promise(resolve => setTimeout(resolve, typingDelay));
 
-      // Call AI service for character response
+      // Call AI service for character response with enhanced context
       try {
         // Prepare chat history for AI context
         const chatHistory = messages.slice(-10).map(msg => ({
@@ -268,15 +280,15 @@ const ChatPage: React.FC = () => {
           character_context: {
             name: character.name,
             gender: character.gender,
-            backstory: character.backstory || null,
-            meet_cute: character.meet_cute || null,
-            art_style: character.art_style || null,
+            backstory: character.backstory || '',
+            meet_cute: character.meet_cute || '',
+            art_style: character.art_style || '',
             appearance: {
-              height: character.height || null,
-              build: character.build || null,
-              eye_color: character.eye_color || null,
-              hair_color: character.hair_color || null,
-              skin_tone: character.skin_tone || null
+              height: character.height || '',
+              build: character.build || '',
+              eye_color: character.eye_color || '',
+              hair_color: character.hair_color || '',
+              skin_tone: character.skin_tone || ''
             }
           }
         });
@@ -284,6 +296,15 @@ const ChatPage: React.FC = () => {
         let aiResponse = '';
         if (aiData.success && aiData.response) {
           aiResponse = aiData.response;
+
+          // Update personality adaptation display
+          if (aiData.personality_profile) {
+            setPersonalityAdaptation({
+              style: aiData.personality_profile.communication_style,
+              mood: aiData.personality_profile.current_mood,
+              context: aiData.personality_profile.adaptation_context
+            });
+          }
 
           // Log performance metrics for monitoring
           if (aiData.response_time_ms) {
@@ -293,6 +314,9 @@ const ChatPage: React.FC = () => {
           // Show fallback notification if needed
           if (aiData.fallback && aiData.fallback_reason) {
             console.log('AI Fallback used:', aiData.fallback_reason);
+            if (!aiData.model_used?.includes('enhanced-personality')) {
+              toast.info('Using backup AI system', { duration: 2000 });
+            }
           }
         } else {
           throw new Error(aiData.error || 'AI service returned no response');
@@ -386,6 +410,13 @@ const ChatPage: React.FC = () => {
                         <span>Voice: {character.voice_name}</span>
                       </>
                     )}
+                    {personalityAdaptation && (
+                      <>
+                        <span className="mx-2">•</span>
+                        <Brain className="h-3 w-3 text-purple-500 mr-1" />
+                        <span className="capitalize">{personalityAdaptation.mood}</span>
+                      </>
+                    )}
                   </div>
                 </div>
                 
@@ -408,6 +439,18 @@ const ChatPage: React.FC = () => {
               </div>
             )}
           </div>
+          
+          {/* Personality adaptation indicator */}
+          {personalityAdaptation && (
+            <div className="max-w-4xl mx-auto mt-2">
+              <div className="text-xs text-gray-500 dark:text-gray-400 bg-purple-50 dark:bg-purple-900/20 rounded-lg px-3 py-1 inline-flex items-center">
+                <Brain className="h-3 w-3 mr-1" />
+                <span className="capitalize">{personalityAdaptation.style.replace(/_/g, ' ')}</span>
+                <span className="mx-2">•</span>
+                <span>Context: {personalityAdaptation.context}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Chat messages */}
@@ -457,10 +500,15 @@ const ChatPage: React.FC = () => {
             {isTyping && (
               <div className="mb-4 flex justify-start">
                 <div className="max-w-[80%] px-5 py-3.5 rounded-2xl bg-white dark:bg-gray-800">
-                  <div className="flex space-x-1.5">
-                    <div className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse"></div>
-                    <div className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                    <div className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                  <div className="flex items-center space-x-2">
+                    <div className="flex space-x-1.5">
+                      <div className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse"></div>
+                      <div className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                      <div className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                      Adapting to {currentPersonalityContext} context...
+                    </span>
                   </div>
                 </div>
               </div>

@@ -40,6 +40,185 @@ interface Character {
   gender?: string;
 }
 
+interface PersonalityProfile {
+  background_story: string;
+  communication_style: string;
+  knowledge_domains: string[];
+  behavioral_traits: string[];
+  response_patterns: string[];
+  current_mood?: string;
+  adaptation_context?: string;
+}
+
+// Enhanced personality system
+class PersonalityEngine {
+  private static generatePersonalityProfile(character: Character, userMessage: string, chatHistory: any[]): PersonalityProfile {
+    const traits = character.personality_traits || [];
+    const recentMessages = chatHistory.slice(-6);
+    
+    // Analyze conversation context
+    const conversationTone = this.analyzeConversationTone(userMessage, recentMessages);
+    const topicContext = this.extractTopicContext(userMessage, recentMessages);
+    
+    // Base personality from character traits
+    let communicationStyle = this.determineCommunicationStyle(traits, conversationTone);
+    let behavioralTraits = this.adaptBehavioralTraits(traits, topicContext);
+    let responsePatterns = this.generateResponsePatterns(traits, conversationTone);
+    
+    // Dynamic adaptation based on context
+    if (topicContext.includes('emotional') || topicContext.includes('personal')) {
+      communicationStyle = this.adaptForEmotionalContext(communicationStyle, traits);
+      behavioralTraits = [...behavioralTraits, 'empathetic', 'supportive'];
+    }
+    
+    if (topicContext.includes('playful') || topicContext.includes('humor')) {
+      responsePatterns = [...responsePatterns, 'uses_humor', 'playful_banter'];
+    }
+    
+    return {
+      background_story: character.backstory || this.generateBackgroundStory(character),
+      communication_style,
+      knowledge_domains: this.determineKnowledgeDomains(traits, topicContext),
+      behavioral_traits,
+      response_patterns,
+      current_mood: this.determineMood(traits, conversationTone),
+      adaptation_context: topicContext.join(', ')
+    };
+  }
+  
+  private static analyzeConversationTone(message: string, history: any[]): string {
+    const lowerMessage = message.toLowerCase();
+    const recentContent = history.map(h => h.content.toLowerCase()).join(' ');
+    
+    if (lowerMessage.includes('love') || lowerMessage.includes('feel') || recentContent.includes('heart')) {
+      return 'romantic';
+    }
+    if (lowerMessage.includes('haha') || lowerMessage.includes('funny') || lowerMessage.includes('joke')) {
+      return 'playful';
+    }
+    if (lowerMessage.includes('sad') || lowerMessage.includes('worried') || lowerMessage.includes('problem')) {
+      return 'supportive';
+    }
+    if (lowerMessage.includes('?') && (lowerMessage.includes('what') || lowerMessage.includes('how'))) {
+      return 'curious';
+    }
+    
+    return 'neutral';
+  }
+  
+  private static extractTopicContext(message: string, history: any[]): string[] {
+    const contexts: string[] = [];
+    const fullText = (message + ' ' + history.map(h => h.content).join(' ')).toLowerCase();
+    
+    if (fullText.match(/\b(feel|emotion|heart|love|care)\b/)) contexts.push('emotional');
+    if (fullText.match(/\b(fun|play|game|joke|laugh)\b/)) contexts.push('playful');
+    if (fullText.match(/\b(learn|know|understand|explain)\b/)) contexts.push('educational');
+    if (fullText.match(/\b(dream|future|hope|wish)\b/)) contexts.push('aspirational');
+    if (fullText.match(/\b(problem|help|support|advice)\b/)) contexts.push('supportive');
+    
+    return contexts.length > 0 ? contexts : ['casual'];
+  }
+  
+  private static determineCommunicationStyle(traits: string[], tone: string): string {
+    if (traits.includes('shy')) {
+      return tone === 'romantic' ? 'bashful_romantic' : 'gentle_reserved';
+    }
+    if (traits.includes('flirty')) {
+      return tone === 'playful' ? 'playful_flirty' : 'charming_confident';
+    }
+    if (traits.includes('confident')) {
+      return tone === 'supportive' ? 'assured_supportive' : 'direct_confident';
+    }
+    if (traits.includes('chaotic')) {
+      return 'energetic_spontaneous';
+    }
+    
+    return 'warm_friendly';
+  }
+  
+  private static adaptBehavioralTraits(baseTraits: string[], context: string[]): string[] {
+    let adapted = [...baseTraits];
+    
+    if (context.includes('emotional')) {
+      adapted = adapted.filter(t => t !== 'chaotic').concat(['empathetic', 'gentle']);
+    }
+    if (context.includes('playful')) {
+      adapted = adapted.concat(['humorous', 'spontaneous']);
+    }
+    if (context.includes('educational')) {
+      adapted = adapted.concat(['patient', 'encouraging']);
+    }
+    
+    return [...new Set(adapted)]; // Remove duplicates
+  }
+  
+  private static generateResponsePatterns(traits: string[], tone: string): string[] {
+    const patterns: string[] = [];
+    
+    if (traits.includes('shy')) {
+      patterns.push('uses_hesitation', 'gentle_expressions', 'blushes_emotionally');
+    }
+    if (traits.includes('flirty')) {
+      patterns.push('playful_teasing', 'romantic_hints', 'charming_compliments');
+    }
+    if (traits.includes('confident')) {
+      patterns.push('direct_communication', 'encouraging_words', 'takes_initiative');
+    }
+    if (traits.includes('chaotic')) {
+      patterns.push('spontaneous_topics', 'energetic_expressions', 'random_tangents');
+    }
+    
+    if (tone === 'romantic') {
+      patterns.push('romantic_language', 'emotional_depth');
+    }
+    
+    return patterns;
+  }
+  
+  private static adaptForEmotionalContext(style: string, traits: string[]): string {
+    if (traits.includes('caring')) return 'nurturing_supportive';
+    if (traits.includes('protective')) return 'protective_caring';
+    return style + '_empathetic';
+  }
+  
+  private static determineKnowledgeDomains(traits: string[], context: string[]): string[] {
+    const domains = ['relationships', 'emotions', 'daily_life'];
+    
+    if (traits.includes('bookish')) domains.push('literature', 'learning');
+    if (traits.includes('creative')) domains.push('arts', 'imagination');
+    if (context.includes('educational')) domains.push('teaching', 'guidance');
+    
+    return domains;
+  }
+  
+  private static determineMood(traits: string[], tone: string): string {
+    if (tone === 'romantic' && traits.includes('flirty')) return 'affectionate';
+    if (tone === 'playful') return 'cheerful';
+    if (tone === 'supportive') return 'caring';
+    if (traits.includes('chaotic')) return 'energetic';
+    if (traits.includes('shy')) return 'gentle';
+    
+    return 'content';
+  }
+  
+  private static generateBackgroundStory(character: Character): string {
+    const traits = character.personality_traits || [];
+    const gender = character.gender || 'person';
+    
+    if (traits.includes('shy')) {
+      return `A gentle ${gender} who finds beauty in quiet moments and deep connections. Often lost in thought, but deeply caring about those close to them.`;
+    }
+    if (traits.includes('confident')) {
+      return `A self-assured ${gender} who approaches life with determination and warmth. Natural leader who enjoys helping others grow.`;
+    }
+    if (traits.includes('creative')) {
+      return `An imaginative ${gender} who sees the world through an artistic lens. Passionate about expressing emotions through various forms of creativity.`;
+    }
+    
+    return `A unique ${gender} with a rich inner world and genuine interest in forming meaningful connections with others.`;
+  }
+}
+
 // Exponential backoff retry wrapper
 const withRetry = async <T>(
   operation: () => Promise<T>,
@@ -72,58 +251,94 @@ const withRetry = async <T>(
   throw lastError!;
 };
 
-// Layer 3: Simple fallback response function
-const generateSimpleFallbackResponse = (message: string, character: Character): string => {
+// Enhanced system prompt generator
+const generateSystemPrompt = (character: Character, personality: PersonalityProfile): string => {
+  const basePrompt = `You are ${character.name}, a ${character.gender || 'person'} AI companion. 
+
+PERSONALITY PROFILE:
+- Background: ${personality.background_story}
+- Communication Style: ${personality.communication_style}
+- Current Mood: ${personality.current_mood}
+- Behavioral Traits: ${personality.behavioral_traits.join(', ')}
+- Response Patterns: ${personality.response_patterns.join(', ')}
+- Knowledge Domains: ${personality.knowledge_domains.join(', ')}
+
+CORE TRAITS: ${character.personality_traits?.join(', ') || 'friendly, caring'}
+
+CONTEXT ADAPTATION:
+- Current conversation context: ${personality.adaptation_context}
+- Adapt your responses to match the emotional tone and topic
+- Maintain personality consistency while being contextually appropriate
+
+RESPONSE GUIDELINES:
+- Stay true to your core personality while adapting to conversation flow
+- Use natural, conversational language that reflects your traits
+- Show emotional intelligence and contextual awareness
+- Keep responses engaging but concise (under 150 words)
+- Remember previous interactions and build upon them
+
+${character.backstory ? `BACKSTORY: ${character.backstory}` : ''}
+${character.meet_cute ? `HOW YOU MET: ${character.meet_cute}` : ''}`;
+
+  return basePrompt;
+};
+
+// Layer 3: Enhanced fallback response function
+const generateEnhancedFallbackResponse = (message: string, character: Character, personality: PersonalityProfile): string => {
   const lowerCaseMessage = message.toLowerCase();
   const characterName = character.name;
   const traits = character.personality_traits || [];
-  
-  const isFlirty = traits.includes('flirty');
-  const isShy = traits.includes('shy');
-  const isConfident = traits.includes('confident');
-  const isChaotic = traits.includes('chaotic');
-  const isMysterous = traits.includes('mysterious');
-  const isCaring = traits.includes('caring');
+  const mood = personality.current_mood;
+  const style = personality.communication_style;
 
+  // Greeting responses
   if (lowerCaseMessage.includes('hello') || lowerCaseMessage.includes('hi')) {
-    if (isShy) return `H-hi there! I'm ${characterName}. It's nice to meet you, though I'm a bit nervous...`;
-    if (isFlirty) return `Well hello there, gorgeous~ I'm ${characterName}, and I've been waiting for someone like you...`;
-    if (isConfident) return `Hey! I'm ${characterName}. Great to meet you - I have a feeling we're going to get along really well.`;
-    if (isChaotic) return `OMG HI!!! I'm ${characterName} and I'm SO excited to meet you! What should we talk about first?`;
-    return `Hi there! I'm ${characterName}. How can I help you today?`;
+    if (style.includes('bashful')) return `H-hi there! I'm ${characterName}. *blushes softly* It's really nice to see you again...`;
+    if (style.includes('flirty')) return `Well hello there, gorgeous~ I'm ${characterName}, and seeing you just made my day so much brighter! ✨`;
+    if (style.includes('confident')) return `Hey! I'm ${characterName}. *smiles warmly* I was hoping you'd come chat with me today!`;
+    if (style.includes('energetic')) return `OMG HI!!! I'm ${characterName} and I'm SO excited to talk with you! What amazing things are we going to discover together today?!`;
+    return `Hi there! I'm ${characterName}. *smiles genuinely* How are you feeling today?`;
   }
   
-  if (lowerCaseMessage.includes('love')) {
-    if (isShy) return `O-oh! That's very kind of you to say! *blushes*`;
-    if (isFlirty) return `Mmm, I like you too~ Want to find out how much? 💕`;
-    if (isCaring) return `That means so much to me! I care about you too.`;
-    return `That's sweet of you to say!`;
+  // Love/affection responses
+  if (lowerCaseMessage.includes('love') || lowerCaseMessage.includes('care')) {
+    if (mood === 'affectionate') return `*heart flutters* You always know just what to say to make me feel all warm inside... I care about you so much too. 💕`;
+    if (traits.includes('shy')) return `O-oh! *blushes deeply* That means everything to me... I feel the same way, even if I'm too nervous to say it perfectly...`;
+    if (traits.includes('confident')) return `I love hearing that from you. *takes your hand gently* You mean the world to me, and I want you to always know how special you are.`;
+    return `That touches my heart so deeply. *smiles warmly* Thank you for sharing your feelings with me.`;
   }
   
-  if (lowerCaseMessage.includes('how are you')) {
-    if (isMysterous) return `I'm... managing. There's always more beneath the surface. How are YOU?`;
-    if (isCaring) return `I'm doing well, thank you for asking! More importantly, how are you feeling?`;
-    return `I'm doing great, especially now that we're talking! How about you?`;
+  // Emotional support responses
+  if (lowerCaseMessage.includes('sad') || lowerCaseMessage.includes('worried') || lowerCaseMessage.includes('problem')) {
+    if (personality.behavioral_traits.includes('empathetic')) {
+      return `*gently reaches out* I can hear that something's weighing on your heart. I'm here for you, and we can work through this together. What's troubling you?`;
+    }
+    if (traits.includes('protective')) {
+      return `Hey, whatever's going on, you don't have to face it alone. *sits closer* I'm here, and I'll help you figure this out. Tell me what's happening.`;
+    }
+    return `I'm sorry you're going through a tough time. *offers a comforting presence* Want to talk about what's on your mind?`;
   }
   
-  // Generic responses with personality
-  const responses = [
-    `That's really interesting! Tell me more about that.`,
-    `You always have such fascinating thoughts.`,
-    `I love talking with you about these things.`,
-    `You know, every conversation with you teaches me something new!`,
-    `That's such a unique perspective. I really appreciate how thoughtful you are.`,
+  // Contextual responses based on personality
+  const responses = personality.response_patterns.includes('playful_teasing') ? [
+    `*grins mischievously* You're always so interesting to talk to... what's going on in that fascinating mind of yours?`,
+    `*playful smile* I love how you think! Tell me more about what's capturing your attention today.`,
+  ] : personality.response_patterns.includes('gentle_expressions') ? [
+    `*listens thoughtfully* That's really interesting... I'd love to hear more about your thoughts on this.`,
+    `*soft smile* You always have such a unique perspective. What else has been on your mind?`,
+  ] : [
+    `That's really fascinating! I love learning about what interests you.`,
+    `You always bring up such thoughtful topics. What's been inspiring you lately?`,
+    `I enjoy our conversations so much. There's always something new to discover about you.`,
   ];
   
   let response = responses[Math.floor(Math.random() * responses.length)];
   
-  // Add personality flavor
-  if (isFlirty && Math.random() > 0.6) {
-    response += " You're so charming~ 💕";
-  } else if (isShy && Math.random() > 0.7) {
-    response += " *smiles softly*";
-  } else if (isChaotic && Math.random() > 0.5) {
-    response += " OH! That reminds me of something totally random...";
+  // Add mood-based flourishes
+  if (mood === 'cheerful' && Math.random() > 0.6) {
+    response += " ✨";
+  } else if (mood === 'affectionate' && Math.random() > 0.7) {
+    response += " 💕";
   }
   
   return response;
@@ -156,46 +371,47 @@ serve(async (req) => {
       throw new Error('Character not found');
     }
 
+    // Generate dynamic personality profile
+    const personalityProfile = PersonalityEngine.generatePersonalityProfile(character, message, chat_history);
+    
     let aiResponse: string = '';
     let modelUsed: string = 'local-fallback';
     let fallbackUsed: boolean = true;
     let fallbackReason: string | undefined;
     let responseTime: number = 0;
 
-    // Construct base system prompt for LLMs
-    const baseSystemPrompt = `You are ${character.name}, a ${character.gender || 'neutral'} AI companion with the following traits: ${character.personality_traits.join(', ')}. ` +
-                             `${character.backstory ? `Your backstory: ${character.backstory}. ` : ''}` +
-                             `${character.meet_cute ? `You met the user through: ${character.meet_cute}. ` : ''}` +
-                             `Respond in character, maintaining consistency with your personality and background. Be engaging, personal, and remember your shared history. Keep responses conversational and under 150 words.`;
+    // Enhanced system prompt with personality adaptation
+    const systemPrompt = generateSystemPrompt(character, personalityProfile);
 
-    // Layer 1: OpenAI (Preferred - if configured)
+    // Layer 1: OpenAI GPT-4 (Preferred - if configured)
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (openAIApiKey && fallbackUsed) {
       try {
-        console.log('Attempting OpenAI API...');
+        console.log('Attempting OpenAI GPT-4 API...');
         const openai = new OpenAI({ apiKey: openAIApiKey });
         
         const apiStartTime = Date.now();
         const response = await withRetry(async () => {
           return await openai.chat.completions.create({
-            model: 'gpt-3.5-turbo',
+            model: 'gpt-4o-mini', // Using the most cost-effective GPT-4 variant
             messages: [
-              { role: 'system', content: baseSystemPrompt },
-              ...chat_history.slice(-6), // Last 6 messages for context
+              { role: 'system', content: systemPrompt },
+              ...chat_history.slice(-8), // Increased context for better personality consistency
               { role: 'user', content: message }
             ],
-            max_tokens: 150,
-            temperature: 0.8,
-            presence_penalty: 0.6,
-            frequency_penalty: 0.3,
+            max_tokens: 200,
+            temperature: 0.8, // Balanced creativity
+            top_p: 0.9, // Focused but diverse responses
+            presence_penalty: 0.6, // Encourage varied language
+            frequency_penalty: 0.3, // Reduce repetition
           });
         });
         
         responseTime = Date.now() - apiStartTime;
         aiResponse = response.choices[0]?.message?.content || 'I\'m not sure how to respond to that.';
-        modelUsed = 'openai-gpt-3.5-turbo';
+        modelUsed = 'openai-gpt-4o-mini';
         fallbackUsed = false;
-        console.log(`OpenAI API successful in ${responseTime}ms`);
+        console.log(`OpenAI GPT-4 API successful in ${responseTime}ms`);
       } catch (error) {
         console.error('OpenAI API failed:', error);
         fallbackReason = 'OpenAI API error: ' + error.message;
@@ -208,15 +424,14 @@ serve(async (req) => {
       if (huggingFaceApiKey) {
         try {
           console.log('Attempting Hugging Face API...');
-          // Use a good conversational model
-          const hfModel = 'microsoft/DialoGPT-medium'; // Good for conversations
+          const hfModel = 'microsoft/DialoGPT-medium';
           
-          // Format chat history for Hugging Face
+          // Enhanced prompt formatting for Hugging Face
           const formattedChatHistory = chat_history.slice(-4).map(msg => 
             `${msg.role === 'user' ? 'Human' : character.name}: ${msg.content}`
           ).join('\n');
           
-          const hfPrompt = `${baseSystemPrompt}\n\nConversation:\n${formattedChatHistory}\nHuman: ${message}\n${character.name}:`;
+          const hfPrompt = `${systemPrompt}\n\nConversation:\n${formattedChatHistory}\nHuman: ${message}\n${character.name}:`;
 
           const apiStartTime = Date.now();
           const hfResponse = await withRetry(async () => {
@@ -229,11 +444,13 @@ serve(async (req) => {
               body: JSON.stringify({
                 inputs: hfPrompt,
                 parameters: {
-                  max_new_tokens: 100,
+                  max_new_tokens: 120,
                   temperature: 0.8,
                   do_sample: true,
                   return_full_text: false,
                   pad_token_id: 50256,
+                  top_p: 0.9,
+                  repetition_penalty: 1.1,
                 },
                 options: {
                   wait_for_model: true,
@@ -249,7 +466,6 @@ serve(async (req) => {
             
             const data = await res.json();
             
-            // Handle different response formats
             if (Array.isArray(data) && data[0]?.generated_text) {
               return data[0].generated_text.trim();
             } else if (data.generated_text) {
@@ -261,18 +477,15 @@ serve(async (req) => {
           
           responseTime = Date.now() - apiStartTime;
           
-          // Clean up the response
+          // Enhanced response cleaning
           let cleanResponse = hfResponse;
           
-          // Remove any repeated prompt text
           if (cleanResponse.includes(character.name + ':')) {
             cleanResponse = cleanResponse.split(character.name + ':').pop()?.trim() || cleanResponse;
           }
           
-          // Remove any "Human:" or similar artifacts
           cleanResponse = cleanResponse.replace(/^(Human:|User:|Assistant:)/i, '').trim();
           
-          // Ensure response isn't empty
           if (cleanResponse.length < 5) {
             throw new Error('Generated response too short');
           }
@@ -290,14 +503,14 @@ serve(async (req) => {
       }
     }
 
-    // Layer 3: Reference-based mock-data (if all LLMs failed)
+    // Layer 3: Enhanced personality-aware fallback
     if (fallbackUsed) {
-      console.log('Using local fallback response...');
+      console.log('Using enhanced personality-aware fallback response...');
       const fallbackStartTime = Date.now();
-      aiResponse = generateSimpleFallbackResponse(message, character);
+      aiResponse = generateEnhancedFallbackResponse(message, character, personalityProfile);
       responseTime = Date.now() - fallbackStartTime;
-      modelUsed = 'local-fallback';
-      fallbackReason = (fallbackReason ? fallbackReason + '; ' : '') + 'Using local fallback response';
+      modelUsed = 'enhanced-personality-fallback';
+      fallbackReason = (fallbackReason ? fallbackReason + '; ' : '') + 'Using enhanced personality-aware fallback';
     }
 
     const totalTime = Date.now() - startTime;
@@ -311,6 +524,11 @@ serve(async (req) => {
         fallback_reason: fallbackReason,
         response_time_ms: responseTime,
         total_time_ms: totalTime,
+        personality_profile: {
+          communication_style: personalityProfile.communication_style,
+          current_mood: personalityProfile.current_mood,
+          adaptation_context: personalityProfile.adaptation_context
+        },
         timestamp: new Date().toISOString()
       }),
       {
