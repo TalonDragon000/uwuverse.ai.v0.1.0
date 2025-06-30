@@ -300,8 +300,8 @@ const VideoChat: React.FC<VideoChatProps> = ({ character, isOpen, onClose, chatI
       animate={{ opacity: 1 }}
       className="fixed inset-0 z-50 bg-gray-900 flex flex-col"
     >
-      {/* Video Area */}
-      <div className="flex-1 relative">
+      {/* Video Area - Fixed height to make room for chat */}
+      <div className="h-[60vh] relative">
         {/* Main Video (Character) */}
         <div className="w-full h-full bg-gray-800 flex items-center justify-center">
           {tavusVideoUrl && !isMockVideoUrl(tavusVideoUrl) ? (
@@ -310,7 +310,7 @@ const VideoChat: React.FC<VideoChatProps> = ({ character, isOpen, onClose, chatI
               src={tavusVideoUrl}
               autoPlay
               muted={!isAudioEnabled}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
               onError={() => {
                 console.error('Video playback error for URL:', tavusVideoUrl);
                 // Fallback to static image on video error
@@ -321,7 +321,7 @@ const VideoChat: React.FC<VideoChatProps> = ({ character, isOpen, onClose, chatI
             <img
               src={character.image_url}
               alt={character.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center">
@@ -373,8 +373,8 @@ const VideoChat: React.FC<VideoChatProps> = ({ character, isOpen, onClose, chatI
         </div>
       </div>
 
-      {/* Chat Panel */}
-      <div className="h-80 bg-gray-800 border-t border-gray-700 flex flex-col">
+      {/* Chat Panel - Takes remaining space */}
+      <div className="flex-1 bg-gray-800 border-t border-gray-700 flex flex-col min-h-0">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.map((message) => (
