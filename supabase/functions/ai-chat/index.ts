@@ -396,7 +396,7 @@ serve(async (req) => {
     const systemPrompt = generateSystemPrompt(character, personalityProfile);
 
     // Layer 1: OpenAI GPT-4 (Preferred - if configured)
-    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    const openAIApiKey = Deno.env.get('OPENAI_PROJ_API_KEY');
     if (openAIApiKey && fallbackUsed) {
       try {
         console.log('Attempting OpenAI GPT-4 API...');
