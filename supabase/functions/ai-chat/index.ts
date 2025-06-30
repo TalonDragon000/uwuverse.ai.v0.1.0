@@ -46,8 +46,8 @@ interface PersonalityProfile {
   knowledge_domains: string[];
   behavioral_traits: string[];
   response_patterns: string[];
-  current_mood?: string;
-  adaptation_context?: string;
+  current_mood: string;
+  adaptation_context: string;
 }
 
 // Enhanced personality system
@@ -77,12 +77,12 @@ class PersonalityEngine {
     
     return {
       background_story: character.backstory || this.generateBackgroundStory(character),
-      communication_style,
+      communication_style: communicationStyle || 'warm_friendly',
       knowledge_domains: this.determineKnowledgeDomains(traits, topicContext),
       behavioral_traits,
       response_patterns,
-      current_mood: this.determineMood(traits, conversationTone),
-      adaptation_context: topicContext.join(', ')
+      current_mood: this.determineMood(traits, conversationTone) || 'content',
+      adaptation_context: topicContext.join(', ') || 'casual'
     };
   }
   
@@ -257,8 +257,8 @@ const generateSystemPrompt = (character: Character, personality: PersonalityProf
 
 PERSONALITY PROFILE:
 - Background: ${personality.background_story}
-- Communication Style: ${personality.communication_style}
-- Current Mood: ${personality.current_mood}
+- Communication Style: ${personality.communication_style ?? 'warm_friendly'}
+- Current Mood: ${personality.current_mood ?? 'content'}
 - Behavioral Traits: ${personality.behavioral_traits.join(', ')}
 - Response Patterns: ${personality.response_patterns.join(', ')}
 - Knowledge Domains: ${personality.knowledge_domains.join(', ')}
@@ -266,7 +266,7 @@ PERSONALITY PROFILE:
 CORE TRAITS: ${character.personality_traits?.join(', ') || 'friendly, caring'}
 
 CONTEXT ADAPTATION:
-- Current conversation context: ${personality.adaptation_context}
+- Current conversation context: ${personality.adaptation_context ?? 'casual'}
 - Adapt your responses to match the emotional tone and topic
 - Maintain personality consistency while being contextually appropriate
 
@@ -288,8 +288,8 @@ const generateEnhancedFallbackResponse = (message: string, character: Character,
   const lowerCaseMessage = message.toLowerCase();
   const characterName = character.name;
   const traits = character.personality_traits || [];
-  const mood = personality.current_mood;
-  const style = personality.communication_style;
+  const mood = personality.current_mood ?? 'content';
+  const style = personality.communication_style ?? 'warm_friendly';
 
   // Greeting responses
   if (lowerCaseMessage.includes('hello') || lowerCaseMessage.includes('hi')) {
@@ -537,9 +537,9 @@ serve(async (req) => {
         response_time_ms: responseTime,
         total_time_ms: totalTime,
         personality_profile: {
-          communication_style: personalityProfile.communication_style,
-          current_mood: personalityProfile.current_mood,
-          adaptation_context: personalityProfile.adaptation_context
+          communication_style: personalityProfile.communication_style ?? 'warm_friendly',
+          current_mood: personalityProfile.current_mood ?? 'content',
+          adaptation_context: personalityProfile.adaptation_context ?? 'casual'
         },
         timestamp: new Date().toISOString()
       }),
