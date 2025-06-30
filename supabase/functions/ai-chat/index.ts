@@ -352,11 +352,23 @@ serve(async (req) => {
   const startTime = Date.now();
 
   try {
+    // Validate environment variables first
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl) {
+      console.error('SUPABASE_URL environment variable is not set');
+      throw new Error('Supabase configuration error: SUPABASE_URL is missing');
+    }
+
+    if (!supabaseServiceKey) {
+      console.error('SUPABASE_SERVICE_ROLE_KEY environment variable is not set');
+      throw new Error('Supabase configuration error: SUPABASE_SERVICE_ROLE_KEY is missing');
+    }
+
     const { message, character_id, chat_history, character_traits, character_context } = await req.json() as ChatRequest;
 
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    // Create Supabase client with validated environment variables
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch character details for context
@@ -538,10 +550,23 @@ serve(async (req) => {
   } catch (error) {
     const totalTime = Date.now() - startTime;
     console.error('Error in ai-chat function:', error);
+    
+    // Provide more specific error messages based on the error type
+    let errorMessage = 'Chat service is temporarily unavailable. Please try again later.';
+    
+    if (error.message.includes('SUPABASE_URL')) {
+      errorMessage = 'Service configuration error: Database connection not configured.';
+    } else if (error.message.includes('SUPABASE_SERVICE_ROLE_KEY')) {
+      errorMessage = 'Service configuration error: Database authentication not configured.';
+    } else if (error.message.includes('Character not found')) {
+      errorMessage = 'Character not found. Please check the character ID and try again.';
+    }
+    
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: 'Chat service is temporarily unavailable. Please try again later.',
+        error: errorMessage,
+        debug_error: error.message, // Include debug info for development
         total_time_ms: totalTime,
         timestamp: new Date().toISOString()
       }),
