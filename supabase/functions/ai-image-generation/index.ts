@@ -28,9 +28,10 @@ const withRetry = async <T>(
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      // 30 second timeout wrapper for AI image generation
+      // Timeout wrapper for AI image generation
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Operation timeout')), 30000);
+        // For 90 seconds  
+        setTimeout(() => reject(new Error('Operation timeout')), 90000);
       });
       
       return await Promise.race([operation(), timeoutPromise]);
